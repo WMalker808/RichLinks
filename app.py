@@ -2,7 +2,6 @@ import os
 import re
 import html
 import json
-import time
 import threading
 from flask import Flask, render_template, request, jsonify, Response, stream_with_context
 import requests
@@ -36,7 +35,6 @@ def extract_rich_link_targets(body_html: str) -> list[str]:
 
 CAPI_MAX_PAGE_SIZE = 50    # CAPI hard limit per request
 CAPI_HARD_PAGE_LIMIT = 200  # CAPI won't serve beyond page 200
-CAPI_PAGE_DELAY = 0.1      # seconds between successive CAPI requests during a scan
 MAX_CONCURRENT_SCANS = 3   # simultaneous full scans allowed
 
 _scan_semaphore = threading.Semaphore(MAX_CONCURRENT_SCANS)
@@ -305,7 +303,6 @@ def api_scan():
                 }
                 yield f"data: {json.dumps(event)}\n\n"
                 capi_page += 1
-                time.sleep(CAPI_PAGE_DELAY)
 
             yield f"data: {json.dumps({'type': 'done', 'found': found, 'total': total_articles})}\n\n"
 
