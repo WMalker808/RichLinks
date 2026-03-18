@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Guardian Rich Links Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --guardian-blue: #052962;
+      --guardian-yellow: #ffe500;
+      --guardian-red: #c70000;
+      --guardian-neutral-100: #f6f6f6;
+      --guardian-neutral-20: #999;
+      --guardian-neutral-7: #121212;
+      --link-blue: #1d61a1;
+      --badge-bg: #eef3f8;
+      --border: #dcdcdc;
+      --card-bg: #fff;
+      --sidebar-bg: #052962;
+      --sidebar-text: #fff;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: "GuardianTextSans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+      background: var(--guardian-neutral-100);
+      color: var(--guardian-neutral-7);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--guardian-blue);
+      color: #fff;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      height: 60px;
+      flex-shrink: 0;
+    }
+    header .logo {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
+    header .logo span { color: var(--guardian-yellow); }
+    header .subtitle {
+      font-size: 13px;
+      opacity: 0.7;
+      border-left: 1px solid rgba(255,255,255,0.3);
+      padding-left: 16px;
+    }
+
+    /* ── Layout ── */
+    .layout {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Sidebar ── */
+    aside {
+      width: 280px;
+      background: var(--sidebar-bg);
+      color: var(--sidebar-text);
+      padding: 20px 16px;
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+    aside h2 {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--guardian-yellow);
+      margin-bottom: 16px;
+    }
+    .filter-group { margin-bottom: 18px; }
+    .filter-group label {
+      display: block;
+      font-size: 12px;
+      color: rgba(255,255,255,0.7);
+      margin-bottom: 5px;
+    }
+    .filter-group input,
+    .filter-group select {
+      width: 100%;
+      padding: 7px 10px;
+      border-radius: 4px;
+      border: 1px solid rgba(255,255,255,0.2);
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+      font-size: 13px;
+      outline: none;
+    }
+    .filter-group input::placeholder { color: rgba(255,255,255,0.4); }
+    .filter-group select option { background: #052962; color: #fff; }
+    .filter-group input:focus,
+    .filter-group select:focus {
+      border-color: var(--guardian-yellow);
+    }
+    .filter-group .row {
+      display: flex;
+      gap: 8px;
+    }
+    .filter-group .row input { flex: 1; }
+
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+    .toggle-row label { font-size: 13px; color: rgba(255,255,255,0.85); }
+
+    /* toggle switch */
+    .switch { position: relative; display: inline-block; width: 36px; height: 20px; flex-shrink: 0; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute; inset: 0;
+      background: rgba(255,255,255,0.2);
+      border-radius: 20px;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    .slider:before {
+      content: "";
+      position: absolute;
+      width: 14px; height: 14px;
+      left: 3px; top: 3px;
+      background: #fff;
+      border-radius: 50%;
+      transition: 0.2s;
+    }
+    .switch input:checked + .slider { background: var(--guardian-yellow); }
+    .switch input:checked + .slider:before { transform: translateX(16px); background: var(--guardian-blue); }
+
+    .api-key-wrap {
+      position: relative;
+    }
+    .api-key-wrap input { padding-right: 36px; }
+    .api-key-wrap button {
+      position: absolute;
+      right: 6px; top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.5);
+      cursor: pointer;
+      font-size: 14px;
+      padding: 2px;
+    }
+    .api-key-wrap button:hover { color: #fff; }
+
+    .btn-search {
+      width: 100%;
+      padding: 10px;
+      background: var(--guardian-yellow);
+      color: var(--guardian-blue);
+      font-weight: 700;
+      font-size: 14px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .btn-search:hover { opacity: 0.9; }
+    .btn-search:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .divider {
+      border: none;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      margin: 18px 0;
+    }
+
+    /* ── Main ── */
+    main {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+    }
+
+    .stats-bar {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .stat-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 18px;
+      min-width: 140px;
+    }
+    .stat-card .val {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--guardian-blue);
+      line-height: 1;
+    }
+    .stat-card .lbl {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--guardian-neutral-20);
+      margin-top: 4px;
+    }
+
+    /* ── Table ── */
+    .table-wrap {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .table-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      background: #fafafa;
+    }
+    .table-header h3 { font-size: 14px; font-weight: 700; }
+    .table-header .sort-select {
+      font-size: 12px;
+      padding: 4px 8px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: #fff;
+      cursor: pointer;
+    }
+
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      text-align: left;
+      padding: 10px 14px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--guardian-neutral-20);
+      border-bottom: 2px solid var(--border);
+      white-space: nowrap;
+    }
+    thead th.sortable { cursor: pointer; user-select: none; }
+    thead th.sortable:hover { color: var(--guardian-blue); }
+    thead th .sort-icon { margin-left: 4px; opacity: 0.4; }
+    thead th.active .sort-icon { opacity: 1; }
+
+    tbody tr { border-bottom: 1px solid #f0f0f0; transition: background 0.1s; }
+    tbody tr:hover { background: #f9f9f9; }
+    tbody tr:last-child { border-bottom: none; }
+    td { padding: 12px 14px; vertical-align: top; font-size: 13px; }
+
+    .article-title {
+      font-weight: 600;
+      color: var(--guardian-blue);
+      text-decoration: none;
+      line-height: 1.35;
+      display: block;
+      margin-bottom: 4px;
+    }
+    .article-title:hover { text-decoration: underline; }
+    .article-meta { font-size: 11px; color: var(--guardian-neutral-20); }
+    .section-badge {
+      display: inline-block;
+      padding: 2px 7px;
+      background: var(--badge-bg);
+      color: var(--guardian-blue);
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .rich-link-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .rich-link-badge.zero { background: #f0f0f0; color: #999; }
+    .rich-link-badge.low { background: #fff3cd; color: #856404; }
+    .rich-link-badge.mid { background: #d1ecf1; color: #0c5460; }
+    .rich-link-badge.high { background: #cce5ff; color: #004085; }
+    .rich-link-badge.very-high { background: #d4edda; color: #155724; }
+
+    .targets-list { margin-top: 4px; }
+    .target-link {
+      display: block;
+      font-size: 11px;
+      color: var(--link-blue);
+      text-decoration: none;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 280px;
+    }
+    .target-link:hover { text-decoration: underline; }
+    .more-targets { font-size: 11px; color: var(--guardian-neutral-20); }
+
+
+    /* ── Empty / loading / error states ── */
+    .state-panel {
+      text-align: center;
+      padding: 60px 24px;
+      color: var(--guardian-neutral-20);
+    }
+    .state-panel .icon { font-size: 48px; margin-bottom: 12px; }
+    .state-panel h3 { font-size: 16px; color: #555; margin-bottom: 6px; }
+    .state-panel p { font-size: 13px; }
+    .error-panel {
+      background: #fff5f5;
+      border: 1px solid #ffd7d7;
+      border-radius: 6px;
+      padding: 16px 20px;
+      color: var(--guardian-red);
+      font-size: 13px;
+      margin-bottom: 16px;
+    }
+
+    .spinner {
+      width: 36px; height: 36px;
+      border: 3px solid #e0e0e0;
+      border-top-color: var(--guardian-blue);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 14px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Chart ── */
+    .chart-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 16px 20px;
+      margin-bottom: 20px;
+    }
+    .chart-card h3 {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--guardian-neutral-20);
+      margin-bottom: 12px;
+    }
+
+    /* ── Scan UI ── */
+    .btn-stop {
+      width: 100%;
+      padding: 10px;
+      background: var(--guardian-red);
+      color: #fff;
+      font-weight: 700;
+      font-size: 14px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+    .scan-progress {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 20px 24px;
+      margin-bottom: 20px;
+    }
+    .scan-progress h3 { font-size: 14px; font-weight: 700; margin-bottom: 12px; }
+    .progress-bar-wrap {
+      background: #e0e0e0;
+      border-radius: 4px;
+      height: 8px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--guardian-blue);
+      border-radius: 4px;
+      transition: width 0.3s;
+    }
+    .progress-stats {
+      display: flex;
+      gap: 24px;
+      font-size: 13px;
+      color: var(--guardian-neutral-20);
+    }
+    .progress-stats strong { color: var(--guardian-neutral-7); }
+    .scan-complete { color: #155724; font-weight: 700; font-size: 13px; margin-top: 8px; }
+    .btn-export {
+      padding: 8px 16px;
+      background: var(--guardian-blue);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-top: 12px;
+    }
+    .btn-export:hover { opacity: 0.85; }
+
+    /* ── Day articles panel ── */
+    .day-articles-card {
+      background: var(--card-bg);
+      border: 1px solid var(--guardian-blue);
+      border-left: 4px solid var(--guardian-blue);
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+    .day-articles-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--border);
+      background: #f0f4fa;
+    }
+    .day-articles-header h3 {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--guardian-blue);
+      margin-bottom: 3px;
+    }
+    .day-articles-meta {
+      font-size: 12px;
+      color: var(--guardian-neutral-20);
+    }
+    .day-articles-close {
+      background: none;
+      border: none;
+      font-size: 20px;
+      line-height: 1;
+      cursor: pointer;
+      color: var(--guardian-neutral-20);
+      padding: 0 4px;
+      flex-shrink: 0;
+      margin-top: -2px;
+    }
+    .day-articles-close:hover { color: var(--guardian-neutral-7); }
+    .day-articles-list {
+      max-height: 420px;
+      overflow-y: auto;
+    }
+    .day-article-row {
+      display: flex;
+      gap: 12px;
+      padding: 10px 18px;
+      border-bottom: 1px solid #f0f0f0;
+      align-items: flex-start;
+    }
+    .day-article-row:last-child { border-bottom: none; }
+    .day-article-row:hover { background: #f9f9f9; }
+    .day-article-info { flex: 1; min-width: 0; }
+    .day-article-meta {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 4px;
+      flex-wrap: wrap;
+    }
+    .day-article-targets {
+      margin-top: 4px;
+    }
+
+    /* ── Thumbnail ── */
+    .thumb {
+      width: 64px;
+      height: 42px;
+      object-fit: cover;
+      border-radius: 3px;
+      display: block;
+    }
+    .thumb-placeholder {
+      width: 64px; height: 42px;
+      background: #eee;
+      border-radius: 3px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">The <span>Guardian</span></div>
+  <div class="subtitle">Rich Links Dashboard</div>
+</header>
+
+<div class="layout">
+  <!-- ── Sidebar ── -->
+  <aside>
+    <h2>Filters</h2>
+
+    <div class="filter-group">
+      <label>Search query</label>
+      <input type="text" id="q" placeholder="e.g. climate, football…" />
+    </div>
+
+    <div class="filter-group">
+      <label>Section</label>
+      <select id="section">
+        <option value="">All sections</option>
+      </select>
+    </div>
+
+    <div class="filter-group">
+      <label>Tag</label>
+      <input type="text" id="tag" placeholder="e.g. sport/football" />
+    </div>
+
+    <div class="filter-group">
+      <label>Date range</label>
+      <input type="date" id="dateFrom" title="From" style="margin-bottom:6px" />
+      <input type="date" id="dateTo" title="To" />
+    </div>
+
+    <div class="filter-group">
+      <label>Order by</label>
+      <select id="orderBy">
+        <option value="newest">Newest first</option>
+        <option value="oldest">Oldest first</option>
+        <option value="relevance">Relevance</option>
+      </select>
+    </div>
+
+    <hr class="divider" />
+
+    <div class="toggle-row">
+      <label class="switch">
+        <input type="checkbox" id="richLinksOnly" checked />
+        <span class="slider"></span>
+      </label>
+      <label for="richLinksOnly">Rich links only</label>
+    </div>
+
+    <div class="filter-group" id="minRichLinksGroup">
+      <label>Minimum rich links</label>
+      <select id="minRichLinks">
+        <option value="1">≥ 1</option>
+        <option value="2">≥ 2</option>
+        <option value="3">≥ 3</option>
+        <option value="5">≥ 5</option>
+      </select>
+    </div>
+
+    <hr class="divider" />
+
+    <button class="btn-search" id="scanBtn" onclick="startScan()">Scan All Pages</button>
+    <button class="btn-stop" id="stopBtn" onclick="stopScan()" style="display:none">Stop Scan</button>
+  </aside>
+
+  <!-- ── Main ── -->
+  <main id="main">
+    <div class="state-panel" id="welcomePanel">
+      <div class="icon">🔗</div>
+      <h3>Guardian Rich Links Dashboard</h3>
+      <p>Set your filters and click Scan All Pages to find articles<br>containing rich links across all CAPI results.</p>
+    </div>
+  </main>
+</div>
+
+<script>
+  // ── Toggle min rich links visibility ──
+  document.getElementById('richLinksOnly').addEventListener('change', function () {
+    document.getElementById('minRichLinksGroup').style.display = this.checked ? '' : 'none';
+  });
+
+  // ── Load sections ──
+  async function loadSections() {
+    try {
+      const resp = await fetch('/api/sections');
+      const data = await resp.json();
+      if (!data.ok) return;
+      const sel = document.getElementById('section');
+      data.sections.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.textContent = s.webTitle;
+        sel.appendChild(opt);
+      });
+    } catch(e) {}
+  }
+
+  // ── Allow Enter key to trigger scan ──
+  document.querySelectorAll('input').forEach(el => {
+    el.addEventListener('keydown', e => { if (e.key === 'Enter') startScan(); });
+  });
+
+  // ── Chart ──
+  let chartInstance = null;
+
+  function renderChart(canvasId, results, dateFrom, dateTo) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+
+    // Aggregate total rich links per day
+    const counts = {};
+    for (const r of results) {
+      if (!r.webPublicationDate) continue;
+      const day = r.webPublicationDate.slice(0, 10);
+      counts[day] = (counts[day] || 0) + r.richLinkCount;
+    }
+
+    // Fill in all dates in the range with 0 if not already present
+    if (dateFrom && dateTo) {
+      const cur = new Date(dateFrom);
+      const end = new Date(dateTo);
+      while (cur <= end) {
+        const day = cur.toISOString().slice(0, 10);
+        if (!(day in counts)) counts[day] = 0;
+        cur.setDate(cur.getDate() + 1);
+      }
+    }
+
+    const labels = Object.keys(counts).sort();
+    const values = labels.map(d => counts[d]);
+
+    if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
+
+    if (!labels.length) {
+      canvas.style.display = 'none';
+      return;
+    }
+
+    chartInstance = new Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Rich links',
+          data: values,
+          backgroundColor: 'rgba(5,41,98,0.75)',
+          borderColor: '#052962',
+          borderWidth: 1,
+          borderRadius: 3,
+        }],
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              title: items => items[0].label,
+              label: item => ` ${item.raw} rich link${item.raw !== 1 ? 's' : ''}`,
+            },
+          },
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: { maxRotation: 45, font: { size: 11 } },
+          },
+          y: {
+            beginAtZero: true,
+            ticks: { precision: 0, font: { size: 11 } },
+          },
+        },
+      },
+    });
+  }
+
+  function rowHtml(r) {
+    const count = r.richLinkCount;
+    const badgeClass = count === 0 ? 'zero' : count === 1 ? 'low' : count <= 3 ? 'mid' : count <= 6 ? 'high' : 'very-high';
+    const date = r.webPublicationDate ? new Date(r.webPublicationDate).toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'}) : '—';
+
+    const targetsHtml = r.richLinkTargets.length
+      ? r.richLinkTargets.slice(0, 3).map(t => {
+          const label = t.replace('https://www.theguardian.com/', '');
+          return `<a class="target-link" href="${escAttr(t)}" target="_blank" title="${escAttr(t)}">${escHtml(label)}</a>`;
+        }).join('') + (r.richLinkTargets.length > 3
+          ? `<span class="more-targets">+${r.richLinkTargets.length - 3} more</span>` : '')
+      : '<span style="color:#ccc">—</span>';
+
+    return `
+      <tr>
+        <td>
+          ${r.thumbnail
+            ? `<img class="thumb" src="${escAttr(r.thumbnail)}" alt="" />`
+            : `<div class="thumb-placeholder"></div>`}
+        </td>
+        <td>
+          <a class="article-title" href="${escAttr(r.webUrl)}" target="_blank">${escHtml(r.headline || r.webTitle)}</a>
+          <div class="article-meta">${escHtml(r.wordcount ? r.wordcount + ' words' : '')}</div>
+        </td>
+        <td><span class="section-badge">${escHtml(r.sectionName)}</span></td>
+        <td class="article-meta">${date}</td>
+        <td>
+          <span class="rich-link-badge ${badgeClass}">
+            🔗 ${count}
+          </span>
+        </td>
+        <td class="targets-list">${targetsHtml}</td>
+      </tr>`;
+  }
+
+  function escHtml(str) {
+    return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function escAttr(str) {
+    return String(str ?? '').replace(/"/g,'&quot;');
+  }
+
+  // Load sections on page load
+  window.addEventListener('DOMContentLoaded', loadSections);
+
+  // ── Scan All Pages ──
+  let scanSource = null;
+  let scanResults = [];
+  let sortCol = null;
+  let sortDir = 'desc';
+
+  function sortBy(col) {
+    if (sortCol === col) {
+      sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      sortCol = col;
+      sortDir = col === 'richLinkCount' ? 'desc' : 'asc';
+    }
+    rerenderTable();
+    updateSortHeaders();
+  }
+
+  function rerenderTable() {
+    const tbody = document.getElementById('scanTbody');
+    if (!tbody) return;
+    const sorted = [...scanResults].sort((a, b) => {
+      let va = a[sortCol] ?? '', vb = b[sortCol] ?? '';
+      if (typeof va === 'string') { va = va.toLowerCase(); vb = vb.toLowerCase(); }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+    tbody.innerHTML = sorted.map(r => rowHtml(r)).join('');
+  }
+
+  function updateSortHeaders() {
+    document.querySelectorAll('thead th.sortable').forEach(th => {
+      const icon = th.querySelector('.sort-icon');
+      if (th.dataset.col === sortCol) {
+        th.classList.add('active');
+        icon.textContent = sortDir === 'asc' ? ' ▲' : ' ▼';
+      } else {
+        th.classList.remove('active');
+        icon.textContent = ' ⇅';
+      }
+    });
+  }
+
+  function startScan() {
+    const q = document.getElementById('q').value.trim();
+    const section = document.getElementById('section').value;
+    const tag = document.getElementById('tag').value.trim();
+    const dateFrom = document.getElementById('dateFrom').value;
+    const dateTo = document.getElementById('dateTo').value;
+    const orderBy = document.getElementById('orderBy').value;
+    const minRichLinks = document.getElementById('minRichLinks').value;
+
+    scanResults = [];
+    sortCol = null;
+    sortDir = 'desc';
+    document.getElementById('scanBtn').disabled = true;
+    document.getElementById('stopBtn').style.display = '';
+
+    const params = new URLSearchParams({ q, section, tag, dateFrom, dateTo, orderBy, minRichLinks });
+
+    const main = document.getElementById('main');
+    main.innerHTML = `
+      <div class="scan-progress" id="scanProgress">
+        <h3>Scanning all CAPI pages…</h3>
+        <div class="progress-bar-wrap"><div class="progress-bar-fill" id="progressFill" style="width:0%"></div></div>
+        <div class="progress-stats">
+          <span>Scanned: <strong id="statScanned">0</strong> / <strong id="statTotal">?</strong></span>
+          <span>Found: <strong id="statFound">0</strong></span>
+        </div>
+      </div>
+      <div class="chart-card" id="scanChartCard" style="display:none">
+        <h3>Rich links per day</h3>
+        <canvas id="scanChart" height="80"></canvas>
+      </div>
+      <div class="table-wrap" id="scanTableWrap" style="display:none">
+        <div class="table-header"><h3>Results so far</h3></div>
+        <table><thead><tr>
+          <th></th>
+          <th class="sortable" data-col="webTitle" onclick="sortBy('webTitle')">Article <span class="sort-icon">⇅</span></th>
+          <th class="sortable" data-col="sectionName" onclick="sortBy('sectionName')">Section <span class="sort-icon">⇅</span></th>
+          <th class="sortable" data-col="webPublicationDate" onclick="sortBy('webPublicationDate')">Published <span class="sort-icon">⇅</span></th>
+          <th class="sortable" data-col="richLinkCount" onclick="sortBy('richLinkCount')">Rich Links <span class="sort-icon">⇅</span></th>
+          <th>Linked Articles</th>
+        </tr></thead>
+        <tbody id="scanTbody"></tbody>
+        </table>
+      </div>`;
+
+    scanSource = new EventSource(`/api/scan?${params}`);
+
+    scanSource.onmessage = (e) => {
+      const msg = JSON.parse(e.data);
+
+      if (msg.type === 'progress') {
+        const pct = msg.total > 0 ? Math.round((msg.scanned / msg.total) * 100) : 0;
+        document.getElementById('progressFill').style.width = pct + '%';
+        document.getElementById('statScanned').textContent = msg.scanned.toLocaleString();
+        document.getElementById('statTotal').textContent = msg.total.toLocaleString();
+        document.getElementById('statFound').textContent = msg.found.toLocaleString();
+
+        if (msg.matches && msg.matches.length) {
+          scanResults.push(...msg.matches);
+          const tbody = document.getElementById('scanTbody');
+          document.getElementById('scanTableWrap').style.display = '';
+          msg.matches.forEach(r => { tbody.insertAdjacentHTML('beforeend', rowHtml(r)); });
+        }
+      }
+
+      if (msg.type === 'done' || msg.type === 'error') {
+        scanSource.close();
+        scanSource = null;
+        finishScan(msg);
+      }
+    };
+
+    scanSource.onerror = () => {
+      scanSource.close();
+      scanSource = null;
+      finishScan({ type: 'error', error: 'Connection lost' });
+    };
+  }
+
+  function stopScan() {
+    if (scanSource) { scanSource.close(); scanSource = null; }
+    finishScan({ type: 'stopped' });
+  }
+
+  function finishScan(msg) {
+    document.getElementById('scanBtn').disabled = false;
+    document.getElementById('stopBtn').style.display = 'none';
+
+    const prog = document.getElementById('scanProgress');
+    if (!prog) return;
+
+    if (msg.type === 'error') {
+      prog.insertAdjacentHTML('beforeend', `<div class="error-panel" style="margin-top:10px">⚠️ ${escHtml(msg.error)}</div>`);
+    } else if (msg.type === 'stopped') {
+      prog.insertAdjacentHTML('beforeend', `<p class="scan-complete">⏹ Scan stopped. ${scanResults.length.toLocaleString()} articles found so far.</p>`);
+    } else {
+      document.getElementById('progressFill').style.width = '100%';
+      prog.insertAdjacentHTML('beforeend', `
+        <p class="scan-complete">✓ Scan complete — ${scanResults.length.toLocaleString()} articles with rich links found out of ${(msg.total || 0).toLocaleString()} total (${msg.total ? (scanResults.length / msg.total * 100).toFixed(1) : 0}%). ${scanResults.reduce((s, r) => s + r.richLinkCount, 0).toLocaleString()} rich links in total.</p>
+        ${scanResults.length ? `<button class="btn-export" onclick="exportCsv()">Export CSV</button>` : ''}
+      `);
+    }
+
+    // Render chart for scan results (stopped or done)
+    if (scanResults.length) {
+      const chartCard = document.getElementById('scanChartCard');
+      if (chartCard) {
+        chartCard.style.display = '';
+        renderChart('scanChart', scanResults, document.getElementById('dateFrom').value, document.getElementById('dateTo').value);
+      }
+    }
+  }
+
+  function exportCsv() {
+    const headers = ['URL', 'Headline', 'Section', 'Published', 'Rich Link Count', 'Rich Link Targets'];
+    const rows = scanResults.map(r => [
+      r.webUrl,
+      r.headline || r.webTitle,
+      r.sectionName,
+      r.webPublicationDate,
+      r.richLinkCount,
+      r.richLinkTargets.join(' | '),
+    ]);
+    const csv = [headers, ...rows]
+      .map(row => row.map(cell => `"${String(cell ?? '').replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'rich-links-scan.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+</script>
+</body>
+</html>

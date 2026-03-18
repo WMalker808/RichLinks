@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: rich-links
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --worker-class gthread --threads 4 --timeout 300 app:app
+    envVars:
+      - key: CAPI_KEY
+        sync: false   # Set this in the Render dashboard — never commit the value
