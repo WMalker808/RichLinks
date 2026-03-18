@@ -261,6 +261,7 @@ def api_scan():
         base_params["to-date"] = date_to
 
     def generate():
+        # Acquire before entering try/finally so we only release what we acquired
         if not _scan_semaphore.acquire(blocking=False):
             yield f"data: {json.dumps({'type': 'error', 'error': 'Server is busy — too many scans running. Please try again in a moment.'})}\n\n"
             return
@@ -274,6 +275,11 @@ def api_scan():
             while True:
                 if total_capi_pages is not None and capi_page > total_capi_pages:
                     break
+
+                # Keepalive comment sent before each blocking CAPI call.
+                # SSE comments are ignored by the browser but reset proxy
+                # and load-balancer idle-connection timers.
+                yield ": keepalive\n\n"
 
                 response = _fetch_capi_page(api_key, base_params, capi_page)
 
