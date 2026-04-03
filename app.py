@@ -2,7 +2,6 @@ import os
 import re
 import html
 import json
-import threading
 from flask import Flask, render_template, request, jsonify, Response, stream_with_context
 import requests
 
@@ -35,9 +34,6 @@ def extract_rich_link_targets(body_html: str) -> list[str]:
 
 CAPI_MAX_PAGE_SIZE = 50    # CAPI hard limit per request
 CAPI_HARD_PAGE_LIMIT = 200  # CAPI won't serve beyond page 200
-MAX_CONCURRENT_SCANS = 3   # simultaneous full scans allowed
-
-_scan_semaphore = threading.Semaphore(MAX_CONCURRENT_SCANS)
 
 
 def _fetch_capi_page(api_key: str, params: dict, page: int) -> dict:
@@ -261,11 +257,6 @@ def api_scan():
         base_params["to-date"] = date_to
 
     def generate():
-        # Acquire before entering try/finally so we only release what we acquired
-        if not _scan_semaphore.acquire(blocking=False):
-            yield f"data: {json.dumps({'type': 'error', 'error': 'Server is busy — too many scans running. Please try again in a moment.'})}\n\n"
-            return
-
         capi_page = 1
         total_articles = 0
         total_capi_pages = None
@@ -314,9 +305,6 @@ def api_scan():
 
         except Exception as e:
             yield f"data: {json.dumps({'type': 'error', 'error': str(e)})}\n\n"
-
-        finally:
-            _scan_semaphore.release()
 
     return Response(
         stream_with_context(generate()),
